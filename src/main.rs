@@ -1,5 +1,6 @@
 mod ray;
-mod camera;
+mod scene;
+mod objects;
 
 use image::{Rgb, RgbImage};
 use glam::{UVec2};
