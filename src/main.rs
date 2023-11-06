@@ -3,20 +3,40 @@ mod scene;
 mod objects;
 
 use image::{Rgb, RgbImage};
-use glam::{UVec2};
+use glam::{Quat, UVec2, Vec3};
+use crate::scene::*;
+use crate::objects::*;
 
 fn main() {
-    let image_size = UVec2::new(256, 256);
-    let mut image = RgbImage::new(image_size.x as u32, image_size.y as u32);
-    for i in 0..image_size.x {
-        for j in 0..image_size.y {
-            let color: Rgb<u8> = Rgb([
-                ((i as f32 / image_size.x as f32) * u8::MAX as f32) as u8,
-                ((j as f32 / image_size.y as f32) * u8::MAX as f32) as u8,
-                0
-                ]
-            );
-            image.put_pixel(i as u32, j as u32, color);
-        }
-    }
+    let mut scene = Scene {
+        camera: vec![Camera::new(Vec3::ZERO, Quat::default(),(1000, 1000),
+        1.0, (1.0, 1.0), Rgb([255, 255, 255]))],
+        objects: vec![
+            Sphere{
+                center: Vec3::new(0., -1., 3.),
+                radius: 1.,
+                material: SolidColor{
+                    color: Rgb([255, 0, 0]),
+                },
+                tolerance: 1e-1
+            },
+            Sphere{
+                center: Vec3::new(2., 0., 4.),
+                radius: 1.,
+                material: SolidColor{
+                    color: Rgb([0, 0, 255]),
+                },
+                tolerance: 1e-5
+            },
+            Sphere{
+                center: Vec3::new(-2., 0., 4.),
+                radius: 1.,
+                material: SolidColor{
+                    color: Rgb([0, 255, 0]),
+                },
+                tolerance: 1e-5
+            }
+        ]
+    };
+    scene.render(0, "test1.png").expect("Error saving image");
 }
