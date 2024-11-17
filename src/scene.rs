@@ -1,8 +1,9 @@
+use std::error::Error;
 use glam::{Vec3, Quat, IVec2};
-use image::{ImageResult, Rgb, RgbImage};
+use image::{EncodableLayout, ImageResult, Rgb, RgbImage};
+use show_image::{create_window, ImageInfo, ImageView, WindowProxy};
 use crate::ray::Ray;
 use crate::objects::{Sphere, SolidColor};
-
 
 pub struct Scene {
     pub camera: Vec<Camera>,
@@ -10,7 +11,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn render(&mut self, camera_id: usize, name: &str) -> ImageResult<()> {
+    pub fn render(&mut self, window: &WindowProxy, camera_id: usize, name: &str) -> Result<(), Box<dyn Error>> {
         let mut camera = &mut self.camera[camera_id];
         for i in -(camera.canvas.height as i32)/2..((camera.canvas.height as i32)/2) {
             for j in -(camera.canvas.width as i32)/2..((camera.canvas.width as i32)/2 ){
@@ -31,7 +32,12 @@ impl Scene {
                 camera.put_pixel(i, j, min_point.0);
             }
         }
-        camera.canvas.screen.save(name)
+        let image_view = ImageView::new(
+            ImageInfo::rgb8(camera.canvas.width, camera.canvas.height), // TODO: don't hardcode image type
+            camera.canvas.screen.as_bytes()
+        );
+        window.set_image(name, image_view)?;
+        Ok(())
     }
 }
 pub struct Camera {
