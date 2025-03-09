@@ -13,19 +13,16 @@ impl Ray {
         self.dir*t + self.origin
     }
 
-    pub fn intersections(&self, objects : &Vec<Sphere<SolidColor>>) -> Vec<(Rgb<u8>, Vec3)> {
-        let mut intersection_points = Vec::new();
+    pub fn intersections<'a>(&self, objects : &'a Vec<Sphere<SolidColor>>) -> Vec<(&'a Sphere<SolidColor>, f32)> {
+        let mut intersections = Vec::new();
         for obj in objects {
-            if let Some(points) = obj.intersection(self) {
-                for p in points {
+            if let Some(hits) = obj.intersection(self) {
+                for t in hits {
                     // println!("point {:?} intersects sphere {:?}", p, obj);
-                    if let Some(color) = obj.get_color(p) {
-                        intersection_points.push((color, p));
-                    }
+                    intersections.push((obj, t));
                 }
             }
-
         }
-        return intersection_points
+        intersections
     }
 }

@@ -1,35 +1,72 @@
 use std::error::Error;
-use glam::{Vec3, Quat, IVec2};
+use glam::{Vec3, Quat, IVec2, Vec2, UVec2};
 use image::{EncodableLayout, ImageResult, Rgb, RgbImage};
 use show_image::{create_window, ImageInfo, ImageView, WindowProxy};
 use crate::ray::Ray;
-use crate::objects::{Sphere, SolidColor};
+use crate::objects::{Sphere, SolidColor, SceneObject};
+use crate::camera::{Camera, };
 
-pub struct Scene {
-    pub camera: Vec<Camera>,
+pub fn lerp(start_value: Rgb<u8>, end_value: Rgb<u8>) -> impl Fn(Ray) -> Rgb<u8>
+{
+    move |ray: Ray| {
+        let a = 0.5*(ray.dir.normalize().z + 1.0);
+        let r = (1.0 - a)*(start_value[0] as f32) + a*(end_value[0] as f32);
+        let g = (1.0 - a)*(start_value[1] as f32) + a*(end_value[1] as f32);
+        let b = (1.0 - a)*(start_value[2] as f32) + a*(end_value[2] as f32);
+        Rgb([r as u8, g as u8, b as u8])
+    }
+}
+
+fn normal_to_color(normal: Vec3) -> Rgb<u8> {
+    let r = ((normal.x + 1.) * 127.) as u8;
+    let g = ((normal.y + 1.) * 127.) as u8;
+    let b = ((normal.z + 1.) * 127.) as u8;
+    Rgb([r, g, b])
+}
+pub struct Scene<F>
+where F: Fn(Ray) -> Rgb<u8> {
+    pub camera: Vec<Camera<F>>,
     pub objects : Vec<Sphere<SolidColor>>,
 }
 
-impl Scene {
+impl<F> Scene<F>
+where F: Fn(Ray) -> Rgb<u8>
+{
     pub fn render(&mut self, window: &WindowProxy, camera_id: usize, name: &str) -> Result<(), Box<dyn Error>> {
         let mut camera = &mut self.camera[camera_id];
-        for i in -(camera.canvas.height as i32)/2..((camera.canvas.height as i32)/2) {
-            for j in -(camera.canvas.width as i32)/2..((camera.canvas.width as i32)/2 ){
-                let ray = camera.create_ray(IVec2::new(i, j));
-                // println!("ray at pixel ({},{}), {:?}", i, j, ray);
+        // println!("Pixel Origin: {}, du: {}, dv: {}",camera.pixel_origin, camera.pixel_delta_u, camera.pixel_delta_v);
+        for i in 0..camera.canvas.width {
+            for j in 0..camera.canvas.height{
+                let ray = camera.create_ray(UVec2::new(i, j));
                 let intersections = ray.intersections(&self.objects);
-                let min_point = intersections
+                if let Some((obj, min_t)) = intersections
                     .iter()
-                    .fold((camera.background_color, f32::MAX),
-                                 |(acc_color, acc_dist), &(color, pos)| {
-                                     let distance = (pos - camera.origin).length_squared();
-                                     if distance < acc_dist {
-                                         (color, distance)
-                                     } else {
-                                         (color, distance)
-                                     }
-                                 });
-                camera.put_pixel(i, j, min_point.0);
+                    .fold(None, |acc, &(sphere, t)| {
+                        if t > 0.0 {
+                            if let Some((closest_obj, min_t)) = acc {
+                                if t < min_t {
+                                    Some((sphere, t))
+                                } else {
+                                    acc
+                                }
+                            } else {
+                                Some((sphere, t))
+                            }
+                        } else {
+                            acc
+                        }
+                    })
+                {
+                    let point = ray.at(min_t);
+                    if obj.on(point) {
+                        if (j == camera.canvas.height/2) {
+                            let normal = obj.get_normal(point).unwrap();
+                        }
+                        camera.put_pixel(i, j, normal_to_color(obj.get_normal(point).unwrap()));
+                    }
+                } else {
+                    camera.put_pixel(i, j, (camera.background_generator)(ray));
+                }
             }
         }
         let image_view = ImageView::new(
@@ -40,76 +77,4 @@ impl Scene {
         Ok(())
     }
 }
-pub struct Camera {
-    pub origin: Vec3,
-    pub rotation: Quat,
-    pub canvas: Canvas,
-    pub d: f32,
-    pub viewport: Viewport,
-    pub background_color: Rgb<u8>
-}
 
-impl Camera {
-    pub fn new(origin: Vec3,
-           rotation: Quat,
-           canvas_size: (u32, u32),
-           d: f32,
-           viewport_size: (f32, f32),
-           background_color: Rgb<u8>) -> Camera {
-        Camera {
-            origin,
-            rotation,
-            canvas: Canvas::new(canvas_size.0, canvas_size.1),
-            d,
-            viewport: Viewport {
-                width: viewport_size.0,
-                height: viewport_size.1,
-            },
-            background_color,
-        }
-    }
-
-    pub fn create_ray(&self, pixel: IVec2) -> Ray {
-        return Ray {
-            origin: self.origin.clone(),
-            dir: self.canvas_to_viewport(pixel),
-        }
-    }
-
-    fn canvas_to_viewport(&self, coord: IVec2) -> Vec3 {
-        Vec3 {
-            x: (coord.x as f32) * self.viewport.width / (self.canvas.width as f32) ,
-            y: (coord.y as f32) * self.viewport.height / (self.canvas.height as f32),
-            z: self.d,
-        }
-    }
-
-    fn put_pixel(&mut self, x: i32, y: i32, color: Rgb<u8>) {
-        // println!("Putting color {:?} to pixel ({:?}, {:?})", color, x, y);
-        self.canvas.screen.put_pixel((x + (self.canvas.width/2) as i32) as u32,
-                                     self.canvas.height - ((y + (self.canvas.height/2) as i32) as u32) -1,
-                                        color);
-    }
-
-}
-
-pub struct Canvas {
-    width: u32,
-    height: u32,
-    screen: RgbImage,
-}
-
-impl Canvas {
-    fn new(width: u32, height: u32) -> Canvas {
-        Canvas {
-            width,
-            height,
-            screen: RgbImage::new(width, height)
-        }
-    }
-}
-
-pub struct Viewport {
-    width: f32,
-    height: f32,
-}

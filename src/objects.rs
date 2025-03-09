@@ -13,7 +13,7 @@ pub struct Sphere<T: Material> {
 }
 
 impl<T: Material> Sphere<T> {
-    fn on(&self, point: Vec3) -> bool {
+    pub fn on(&self, point: Vec3) -> bool {
         let dist = (point - self.center).length();
         // println!("point {:?} is {:?} from the sphere center", point, dist);
         (dist - self.radius).abs() <= self.tolerance
@@ -21,7 +21,7 @@ impl<T: Material> Sphere<T> {
 }
 
 impl<T: Material + std::fmt::Debug> SceneObject for Sphere<T> {
-    fn intersection(&self, ray: &Ray) -> Option<Vec<Vec3>> {
+    fn intersection(&self, ray: &Ray) -> Option<Vec<f32>> {
         let co = ray.origin - self.center;
         let a = Vec3::dot(ray.dir, ray.dir);
         let b = 2.0*Vec3::dot(co, ray.dir);
@@ -29,11 +29,11 @@ impl<T: Material + std::fmt::Debug> SceneObject for Sphere<T> {
         let discriminant = b*b - 4.0*a*c;
         if discriminant == 0.0 {
             let t = -b/(2.0*a);
-            Some(vec![ray.at(t)])
+            Some(vec![t])
         } else if discriminant > 0.0 {
             let (t1, t2) = ((-b-f32::sqrt(discriminant))/(2.0*a),
                             (-b+f32::sqrt(discriminant))/(2.0*a));
-            Some(vec![ray.at(t1),ray.at(t2)])
+            Some(vec![t1,t2])
         } else {
             None
         }
@@ -46,12 +46,22 @@ impl<T: Material + std::fmt::Debug> SceneObject for Sphere<T> {
             None
         }
     }
+
+    fn get_normal(&self, point: Vec3) -> Option<Vec3> {
+        if self.on(point) {
+            Some((point - self.center)/self.radius)
+        } else {
+            None
+        }
+    }
 }
 
 pub trait SceneObject {
-    fn intersection(&self, ray: &Ray) -> Option<Vec<Vec3>>;
+    fn intersection(&self, ray: &Ray) -> Option<Vec<f32>>;
 
     fn get_color(&self, point: Vec3) -> Option<Rgb<u8>>;
+
+    fn get_normal(&self, point: Vec3) -> Option<Vec3>;
 }
 
 pub trait Material {
